@@ -21,6 +21,15 @@
  * to track and free in teardown(). This is where this memory manager comes in.
  *
  * 1) Use this manager to create _all_ objects and arrays on the heap required.
+ *    Example:
+ *      Previously:
+ *          int *array = new int[100];
+ *          MyClass *ptr = new MyClass(42, 3.14);
+ *
+ *      Now:
+ *          int *array = MemoryManager::allocateArray<int>(100);
+ *          MyClass *ptr = MemoryManager::allocate<MyClass>(42, 3.14);
+ *
  * 2) Just call MemoryManager.dealloc() inside teardown().
  *    This will automatically free everything allocated.
  *    No need to track down every last pointer.
@@ -33,6 +42,10 @@
 
 class MemoryManager {
 private:
+    /**
+     * @class MemoryBlock
+     * @brief Internal memory block implementation. The user shouldn't need to look at this.
+     */
     struct MemoryBlock {
         void* ptr;
         void (*deleter)(void*); // Function pointer for custom deletion
@@ -56,17 +69,17 @@ public:
      * @return Pointer to the newly allocated data on the heap
      */
     template <typename T>
-    T* allocateArray(size_t size) {
+    T* allocateArray(const size_t size) {
         static_assert(!std::is_class_v<T>, "Use allocate<T>() for custom classes, not allocateArray.");
         void* rawPtr = static_cast<void*>(new T[size]); // Allocate and cast to void*
         memoryBlocks.emplace_back(std::make_unique<MemoryBlock>(
             rawPtr, [](void* p) { delete[] static_cast<T*>(p); } // Correct array deletion
         ));
-        return static_cast<T*>(rawPtr);
-
 #ifndef DNDEBUG
         std::cout << "Allocated array of " << typeid(T).name() << "[" << size << "]\n";
 #endif
+        return static_cast<T*>(rawPtr);
+
     }
 
     /**
